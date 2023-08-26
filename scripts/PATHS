@@ -1,7 +1,29 @@
 #!/usr/bin/env bash
 
-FOLDER=test_files
-RUN_MODE=MULTI
+### COMMENT/UNCOMMENT AS NEEDED
+RUN_MODE=SINGLE
+#RUN_MODE=MULTI
+#RUN_MODE=MATRIX
+
+MODE=1
+#MODE=2
+
+case "$RUN_MODE" in
+    "SINGLE")
+	FOLDER=SINGLE #spaceholder name
+        ;;
+    "MULTI")
+	# adjust to the correct folder
+	FOLDER=test_files
+        ;;
+    "MATRIX")
+        FOLDER=MATRIX #spaceholder name
+        ;;
+    *)
+        log_message "Please adjust the RUN_MODE."
+        ;;
+esac
+
 
 # CHECK IF THESE LOCATIONS ARE CORRECT ON YOUR ACCOUNT!
 MAIN=/u/${USER}/arrayMalphaplex
@@ -27,6 +49,8 @@ LOC_OUT=${PTMP}/output_files/$OUT_NAME  # Specify where your outputs  are locate
 LOC_FEA_GEN=${LOC_SCRIPTS}/feaGen       # Specify where feature generating scripts are located
 LOC_LISTS=${LOC_SCRIPTS}/lists          # Specify where list files    are located
 LOC_SLURMS=${LOC_SCRIPTS}/SLURMS
+LOC_FLAGS=${LOC_SCRIPTS}/FLAGS
+INFO_LIST=${LOC_LISTS}/${FOLDER}_INFO.txt
 
 #INPUT_LIST=${LOC_LISTS}/${FOLDER}_stoichiometries.txt
 OUT_NAME_LIST=${LOC_LISTS}/${FOLDER}_outnames.txt
