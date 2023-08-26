@@ -206,21 +206,21 @@ initialize_run_dir() {
 
 # Function to assess model files
 assess_model_files() {
-	local LOC_OUT=$1
-	local OUT_NAME=$2
+	local loc_out=$1
+	local out_name=$2
 
 	# Ignore error messages with 2>/dev/null
-	cd ${LOC_OUT} 2>/dev/null
+	cd ${loc_out} 2>/dev/null
 
 	# Remove pickle files
 	find . 2>/dev/null -name "*.pkl" -delete
 
 	# Count various types of model files
-	OUT_RLX_MODEL_COUNT=$(ls 2>/dev/null | grep -c ^relaxed_${OUT_NAME}_model_*)
-	OUT_MODEL_COUNT=$(ls 2>/dev/null | grep -c ^${OUT_NAME}_model_*)
+	OUT_RLX_MODEL_COUNT=$(ls 2>/dev/null | grep -c ^relaxed_${out_name}_model_*)
+	OUT_MODEL_COUNT=$(ls 2>/dev/null | grep -c ^${out_name}_model_*)
 	MODEL_COUNT=$(ls 2>/dev/null | grep -c ^model_*)
 	MOVED_OUT_MODEL_COUNT=0
-	[ -d ./MODELS ] && MOVED_OUT_MODEL_COUNT=$(ls ./MODELS 2>/dev/null | grep -c ^${OUT_NAME}_model_*)
+	if [ -d "./MODELS" ]; then MOVED_OUT_MODEL_COUNT=$(ls ./MODELS 2>/dev/null | grep -c "^${out_name}_model_"); fi
 }
 
 run_single_mode() {
@@ -321,83 +321,91 @@ check_and_process_fasta() {
 }
 
 submit_jobs_based_on_mode() {
-	local mode=$1
-	local loc_fasta=$2
-	local loc_features=$3
-	local stoichiometry=$4
-	local loc_out=$5
-	local out_name=$6
-	local loc_scripts=$7
-	local file=$8
+    local mode=$1
+    local loc_fasta=$2
+    local loc_features=$3
+    local stoichiometry=$4
+    local loc_out=$5
+    local out_name=$6
+    local loc_scripts=$7
+    local file=$8
 
-	if [ "$mode" -eq 1 ]; then
-		local length=$(calculate_setup_aa_length "$loc_fasta" "$loc_features" "$stoichiometry")
+    if [ "$mode" -eq 1 ]; then
+        local length=$(calculate_setup_aa_length "$loc_fasta" "$loc_features" "$stoichiometry")
 
-		# Check which models are missing and create an array
-		local missing_models=()
-		for i in {1..5}; do
-			evaluate_prediction_for_model "$loc_out" "$out_name" "$i" "$loc_scripts" "$file" "$mode"
-			if [ "$PREDICTION_STATUS" != "PASS" ]; then
-				missing_models+=("$i")
-			fi
-		done
+        # Check which models are missing and create an array
+        local missing_models=()
+        for i in {1..5}; do
+            evaluate_prediction_for_model "$loc_out" "$out_name" "$i" "$loc_scripts" "$file" "$mode"
+            if [ "$PREDICTION_STATUS" != "PASS" ]; then
+                missing_models+=("$i")
+            fi
+        done
 
-		# Create a string representing the missing models for sbatch
-		local missing_models_str=$(IFS=,; echo "${missing_models[*]}")
+        # Create a string representing the missing models for sbatch
+        local missing_models_str=$(IFS=,; echo "${missing_models[*]}")
 
-		if [ "$length" -lt 2000 ]; then
-			local JOBID1=$(sbatch --parsable script_model_all.sh)
-			echo "Starting ${JOBID1} (PRED 1-5)"
-		elif [ -n "$missing_models_str" ]; then
-			# Submit a job array only for the missing models
-			local JOBID1=$(sbatch --array="$missing_models_str" --parsable script_model_X.sh)
-			echo "Starting ${JOBID1} (PRED $missing_models_str)"
-			MODELING_JOBIDS+=("$JOBID1")
-		fi
-	else
-		echo "NOT SUBMITTING NEW JOBS FOR ${OUT_NAME} - CHANGE MODE TO ALLOW NEW SUBMISSIONS."
-	fi
+        # Check if all models are missing
+        if [ ${#missing_models[@]} -eq 5 ]; then
+            if [ "$length" -lt 2000 ]; then
+                local JOBID1=$(sbatch --parsable script_model_all.sh)
+                echo "Starting ${JOBID1} (PRED 1-5)"
+                PREDICTION_STATUS="FAIL"
+            else
+                local JOBID1=$(sbatch --array=1-5 --parsable script_model_X.sh)
+                echo "Starting ${JOBID1} (PRED 1-5 individually)"
+                MODELING_JOBIDS+=("$JOBID1")
+            fi
+        elif [ -n "$missing_models_str" ]; then
+            # Submit a job array only for the missing models
+            local JOBID1=$(sbatch --array="$missing_models_str" --parsable script_model_X.sh)
+            echo "Starting ${JOBID1} (PRED $missing_models_str)"
+            MODELING_JOBIDS+=("$JOBID1")
+        fi
+    else
+        echo "NOT SUBMITTING NEW JOBS FOR ${OUT_NAME} - CHANGE MODE TO ALLOW NEW SUBMISSIONS."
+    fi
 }
 
 
 # Main function to evaluate prediction for a model
 evaluate_prediction_for_model() {
-	local loc_out=$1
-	local out_name=$2
-	local i=$3  # model index
-	local loc_scripts=$4
-	local file=$5
-	local mode=$6
+        local loc_out=$1
+        local out_name=$2
+        local i=$3  # model index
+        local loc_scripts=$4
+        local file=$5
+        local mode=$6
 
-	cd "${loc_out}" || exit 1
-	find . -name '*.pkl' -delete
+        # Call assess_model_files to get counts
+        assess_model_files "$loc_out" "$out_name"
 
-	local out_rlx_model_count=$(ls 2>/dev/null | grep -c "^relaxed_${out_name}_model_${i}_*")
-	local out_model_count=$(ls 2>/dev/null | grep -c "^${out_name}_model_${i}_*")
-	local model_count=$(ls 2>/dev/null | grep -c "^model_${i}_*")
-	local moved_out_model_count=0
-	[ -d "./MODELS" ] && moved_out_model_count=$(ls ./MODELS 2>/dev/null | grep -c "^${out_name}_model_${i}_*")
+        local model_pattern_count=0
+        if [ -d "./MODELS" ]; then 
+            model_pattern_count=$(ls ./MODELS 2>/dev/null | grep -c "^${out_name}_model_${i}_*") 
+        fi
 
-	local STATUS_MESSAGE=(
-	["TIME_LIMIT"]="TIME LIMIT FAIL OF ${out_name}! WILL NOT START A NEW PREDICTION ROUND..."
-	["X_NOT_IN_LIST"]="X NOT IN LIST FAIL OF ${out_name} MODEL ${i}! WILL NOT START A NEW PREDICTION ROUND..."
-	["OUT_OF_MEMORY"]="OUT OF MEMORY FAIL OF ${out_name} MODEL ${i}! WILL NOT START A NEW PREDICTION ROUND..."
-	)
+        local STATUS_MESSAGE=(
+        ["TIME_LIMIT"]="TIME LIMIT FAIL OF ${out_name}! WILL NOT START A NEW PREDICTION ROUND..."
+        ["X_NOT_IN_LIST"]="X NOT IN LIST FAIL OF ${out_name} MODEL ${i}! WILL NOT START A NEW PREDICTION ROUND..."
+        ["OUT_OF_MEMORY"]="OUT OF MEMORY FAIL OF ${out_name} MODEL ${i}! WILL NOT START A NEW PREDICTION ROUND..."
+        )
 
-	if [[ $out_rlx_model_count -eq 1 || $out_model_count -eq 1 ]]; then
-		PREDICTION_STATUS="PASS"
-	else
-		cd "${loc_scripts}/runs/${out_name}" || exit 1
-		for STATUS in "${!STATUS_MESSAGE[@]}"; do
-			check_grep_status "$STATUS"
-			if [ $? -eq 0 ]; then
-				log_message "$BLUE" "${STATUS_MESSAGE[$STATUS]}"
-				PREDICTION_STATUS="FAIL"
-				return
-			fi
-		done
-	fi
-	PREDICTION_STATUS="FAIL"
+        if [[ $OUT_RLX_MODEL_COUNT -ge 1 || $OUT_MODEL_COUNT -ge 1 || $MODEL_COUNT -ge 1 || $model_pattern_count -ge 1 ]]; then
+                PREDICTION_STATUS="PASS"
+                let PREDICTION_TICKER++
+        else
+                cd "${loc_scripts}/runs/${out_name}" || exit 1
+                for STATUS in "${!STATUS_MESSAGE[@]}"; do
+                        check_grep_status "$STATUS"
+                        if [ $? -eq 0 ]; then
+                                log_message "$BLUE" "${STATUS_MESSAGE[$STATUS]}"
+                                PREDICTION_STATUS="FAIL"
+                                return
+                        fi
+                done
+                PREDICTION_STATUS="FAIL"
+        fi
 }
 
 
@@ -425,9 +433,6 @@ process_prediction() {
 		fi
 	done
 	Rscript --vanilla "${loc_out}/RUN_DETAILS"/extract2csv.R "${loc_out}" "${out_name}"
-	#local new_name_date=$(add_date "$loc_out")
-	#cp -r "${out_dir}/${new_name_date}" "$storage"
-	#local loc_out_date_rep=$(add_rep "${storage}/${new_name_date}")
 }
 # Example usage:
 # process_prediction "$PREDICTION_TICKER" "$LOC_OUT" "$LOC_SCRIPTS" "$OUT_NAME" "$OUT_DIR" "$STORAGE"

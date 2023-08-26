@@ -61,8 +61,8 @@ fi
 # ==== That's it. Nothing to adjust below  ====
 
 # Count lines to get NUM (subtract 1 for header)
-NUM=$(( $(wc -l < "$INFO_LIST") ))
-echo "Number of structures:" $(( $NUM - 1))
+NUM=$(( $(wc -l < "$INFO_LIST") - 1 ))
+echo "Number of structures:" $NUM
 
 # add NUM column to INFO_LIST that enumerates each row
 awk -F'\t' 'BEGIN {OFS="\t"} NR==1 {print $0, "NUM"} NR>1 {print $0, NR-1}' \
