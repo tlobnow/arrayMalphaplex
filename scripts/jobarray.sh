@@ -26,14 +26,12 @@ fi
 
 printf "DATE:\t\t%s\n" "$(date +%Y-%m-%d_%H:%M:%S)"
 printf "MODE:\t\t%s\n" "$MODE"
-printf "NAME:\t\t%s\n" "$OUT_NAME"
+printf "OUT_NAME:\t%s\n" "$OUT_NAME"
 printf "STOICHIOMETRY:\t%s\n" "$STOICHIOMETRY"
 printf "LOC_FEATURES:\t%s\n" "$LOC_FEATURES"
 printf "OUT_DIR:\t%s\n" "$OUT_DIR"
 LOC_OUT=${PTMP}/output_files/$OUT_NAME
 printf "LOC_OUT:\t%s\n" "$LOC_OUT"
-printf "OUT_NAME:\t%s\n" "$OUT_NAME"
-printf "STOICHIOMETRY:\t%s\n" "$STOICHIOMETRY"
 printf "LOC_FEA_GEN:\t%s\n" "$LOC_FEA_GEN"
 printf "LOC_LISTS:\t%s\n" "$LOC_LISTS"
 printf "LOC_SLURMS:\t%s\n" "$LOC_SLURMS"
@@ -52,8 +50,8 @@ FASTA_EXISTS="TRUE"
 if [ -z "$STOICHIOMETRY" ]; then
         echo "Error: STOICHIOMETRY is required" >&2
 fi
-echo "check_and_process_fasta finished."
 
+echo "---------------- MSA & Features ----------------"
 # Split the stoichiometry into individual feature-count pairs and check if all monomers are prepped
 IFS='/' read -ra stoichiometry_pairs <<< "$STOICHIOMETRY"
 for pair in "${stoichiometry_pairs[@]}"; do
@@ -73,46 +71,43 @@ done
 	# If some or all models exist, their status will be evaluated.
 	# If all models have passed, the prediction is processed.
 
+    echo "                 *** Passed *** "
 if [ "$CONTINUE" = "TRUE" ]; then
-	# Initialize the output directory with the template and set the initial files.
-        initialize_run_dir "$LOC_SCRIPTS" "$OUT_NAME"
-	echo "initialize_run_dir finished."
-        # Assess the current status of model files in the output directory.
-        assess_model_files "$LOC_OUT" "$OUT_NAME"
-	echo "assess_model_files finished."
-	echo OUT_RLX_MODEL_COUNT=$OUT_RLX_MODEL_COUNT
-        echo OUT_MODEL_COUNT=$OUT_MODEL_COUNT
-        echo MODEL_COUNT=$MODEL_COUNT
-        echo MOVED_OUT_MODEL_COUNT=$MOVED_OUT_MODEL_COUNT
+    echo "---------------- Initialization ----------------"
+    initialize_run_dir "$LOC_SCRIPTS" "$OUT_NAME"
+    echo "                 *** Passed *** "
 
-	cd ${LOC_SCRIPTS}/runs/${OUT_NAME}
+    echo "------------------ Job Submit ------------------"
+    cd ${LOC_SCRIPTS}/runs/${OUT_NAME}
+    declare -A MODEL_COUNTS # Initialize an associative array to hold the counts for each individual model
+    submit_jobs_based_on_mode "$MODE" "$LOC_FASTA" "$LOC_FEATURES" "$STOICHIOMETRY" "$LOC_OUT" "$OUT_NAME" "$LOC_SCRIPTS" "$FILE"
+    echo "submit_jobs_based_on_mode finished."
+    echo "                 *** Passed *** "
 
-	# jobs can be started if the MODE is 1
-	PREDICTION_TICKER=0
-	submit_jobs_based_on_mode "$MODE" "$LOC_FASTA" "$LOC_FEATURES" "$STOICHIOMETRY" "$LOC_OUT" "$OUT_NAME" "$LOC_SCRIPTS" "$FILE"
-	echo "$PREDICTION_TICKER models have been predicted so far."
+    echo "------------- Checking Model Status ------------"
+    echo "ALL_MODELS_PRESENT:" $ALL_MODELS_PRESENT
 
-	if [ "$PREDICTION_TICKER" -ge 5 ]; then
-		echo "PREDICTION_TICKER greater than or equal to 5."
-		echo "Starting processing of files."
-                process_prediction "$LOC_OUT" "$LOC_SCRIPTS" "$OUT_NAME" "$OUT_DIR" "$STORAGE"
-		echo "Processing finished."
-
-		# Wait for 3 seconds
-    		sleep 3
-
-		# search $LOC_SLURMS for the corresponding slurm file and move it to the $LOC_OUT folder
-		matching_files=($(grep -l "$OUT_NAME" ${LOC_SLURMS}/*))
-		for file in "${matching_files[@]}"; do
-		    mv "$file" "$LOC_OUT/"
-		done
-		NEW_NAME_DATE=$(add_date "$LOC_OUT")
-		mv "${OUT_DIR}/${NEW_NAME_DATE_REP}" "$STORAGE"
-		NEW_NAME_DATE_REP=$(add_rep "${STORAGE}/${NEW_NAME_DATE}")
-        else
-                echo "WAITING FOR ${OUT_NAME} MODELING TO FINISH."
-        fi
+    if [ "$ALL_MODELS_PRESENT" = "true" ]; then
+	echo "                 *** Passed *** "
+        echo "------------ Starting File Processing ----------"
+        process_prediction "$LOC_OUT" "$LOC_SCRIPTS" "$OUT_NAME" "$OUT_DIR" "$STORAGE"
+        sleep 3  # Wait for 3 seconds
+	echo "                *** Passed *** "
+        echo "------------- Moving SLURM Files ---------------"
+        matching_files=($(grep -l "$OUT_NAME" ${LOC_SLURMS}/*))
+        for file in "${matching_files[@]}"; do
+            mv "$file" "$LOC_OUT/"
+        done
+        NEW_NAME_DATE=$(add_date "$LOC_OUT")
+        echo "NEW_NAME_DATE: $NEW_NAME_DATE"
+        mv "${OUT_DIR}/${NEW_NAME_DATE}" "$STORAGE"
+        NEW_NAME_DATE_REP=$(add_rep "${STORAGE}/${NEW_NAME_DATE}")
+        echo "NEW_NAME_DATE_REP: $NEW_NAME_DATE_REP"
+    else
+        echo "WAITING FOR ${OUT_NAME} MODELING TO FINISH."
+    fi
 else
-        echo "WAITING FOR ${OUT_NAME} MSA TO FINISH."
+    echo "WAITING FOR ${OUT_NAME} MSA TO FINISH."
 fi
-echo "Done!"
+echo "                   *** Passed *** "
+echo "----------------------- Done! -------------------"

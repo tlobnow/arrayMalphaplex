@@ -36,7 +36,7 @@ elif [ "$RUN_MODE" == "MULTI" ]; then
 
     # Automatically generate stoichiometry and output name for each fasta file in the folder
     for i in ${LOC_FASTA}/${FOLDER}/*.fasta; do
-        local file_name=$(basename -a -s .fasta $i)
+        file_name=$(basename -a -s .fasta $i)
         echo -e "${A}_x${N_A}_${file_name}_x${N_B}\t${A}:${N_A}/${file_name}:${N_B}" >> "$INFO_LIST"
     done
 
