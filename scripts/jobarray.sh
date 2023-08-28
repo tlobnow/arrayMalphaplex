@@ -81,8 +81,6 @@ if [ "$CONTINUE" = "TRUE" ]; then
     cd ${LOC_SCRIPTS}/runs/${OUT_NAME}
     declare -A MODEL_COUNTS # Initialize an associative array to hold the counts for each individual model
     submit_jobs_based_on_mode "$MODE" "$LOC_FASTA" "$LOC_FEATURES" "$STOICHIOMETRY" "$LOC_OUT" "$OUT_NAME" "$LOC_SCRIPTS" "$FILE"
-    echo "submit_jobs_based_on_mode finished."
-    echo "                 *** Passed *** "
 
     echo "------------- Checking Model Status ------------"
     echo "ALL_MODELS_PRESENT:" $ALL_MODELS_PRESENT

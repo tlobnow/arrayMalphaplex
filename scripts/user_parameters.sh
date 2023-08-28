@@ -21,8 +21,10 @@ source ./FUNCTIONS
 # Case for single protein complex setup
 if [ "$RUN_MODE" == "SINGLE" ]; then
     # You should enter the stoichiometry and output name here
-    STOICHIOMETRY=MYD88_MOUSE:3
-    OUT_NAME=MYD88_MOUSE_x3
+    #STOICHIOMETRY=MYD88_MOUSE:3
+    STOICHIOMETRY=B9EJR8:3
+    #OUT_NAME=MYD88_MOUSE_x3
+    OUT_NAME=B9EJR8_x3
 
     # Write to the information list
     echo -e "${OUT_NAME}\t${STOICHIOMETRY}" >> "$INFO_LIST"

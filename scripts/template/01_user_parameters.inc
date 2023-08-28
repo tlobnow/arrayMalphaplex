@@ -3,8 +3,6 @@
 source ../../PATHS
 source ./00_user_parameters.inc
 
-#if [ "$RUN" = "MATRIX" ]; then source ./target.lst; fi
-#if [ "$RUN" = "MATRIX" ]; then source ${LOC_SCRIPTS}/runs/${OUT_NAME}/target.lst; fi
 if [ "$RUN" = "MATRIX" ]; then TARGET_LST_FILE=./target.lst; fi
 
 ## PRESET SETTINGS #####################################################
@@ -20,7 +18,7 @@ PRESET=super2           #2 ensembles, up to 512 MSA clusters, recycling up to 20
 
 ## RECYCLING SETTINGS #####################################################
 #RECYCLING_SETTING=0     #turn off intermediate recycle output (by setting save_recycled=0) to save memory cost
-RECYCLING_SETTING=1     #no recycle info saving
+#RECYCLING_SETTING=1     #no recycle info saving
 #RECYCLING_SETTING=2    #print metrics of intermediate recycles
 RECYCLING_SETTING=3    #additionally saving pdb structures of all recycles,
 #RECYCLING_SETTING=4    #additionally save all results in pickle

@@ -22,56 +22,66 @@ check_file_exists() {
 	return 0
 }
 
+# check_and_process_fasta: Main function to check and process fasta files.
+check_and_process_fasta() {
+        local stoichiometry_pairs=("$@")
+        for pair in "${stoichiometry_pairs[@]}"; do
+                IFS=':' read -r feature count <<< "$pair"
+                IFS=',' read -ra fasta_files <<< "$feature"
+                for fasta_file in "${fasta_files[@]}"; do
+                        local fasta_path="${LOC_FASTA}/${fasta_file}.fasta"
+                        local feature_file="${LOC_FEATURES}/${fasta_file}/features.pkl"
+                        local flag_file="${LOC_FLAGS}/${fasta_file}.flag"
+
+                        # Check for existing feature files and remove the flag if found.
+                        if check_file_exists "${feature_file}"; then
+                                if [ -f "${flag_file}" ]; then
+                                        echo "Feature file exists for ${fasta_file}. Removing flag."
+                                        rm -f "${flag_file}"
+                                fi
+                                continue
+                        fi
+
+                        # Existing code for checking fasta and feature files
+                        if ! check_file_exists "${fasta_path}"; then
+                                echo "At least one fasta file missing. Not found: $fasta_path"
+                                FASTA_EXISTS="FALSE"
+                        fi
+
+                        if ! check_file_exists "${feature_file}"; then
+                                if [ "$FASTA_EXISTS" = "TRUE" ]; then
+                                        if [ "$MODE" -ne 2 ]; then
+                                                submit_feature_job "${fasta_file}"
+                                        else
+                                                echo "NO SUBMISSION OF MSA JOBS... CHANGE MODE TO START MSA FOR $fasta_file"
+                                        fi
+                                else
+                                        echo "Please supply $fasta_file in $LOC_FASTA"
+                                fi
+                        fi
+                done
+        done
+}
+
 # submit_feature_job: Submits a new SLURM job for generating a feature file.
 # Usage: submit_feature_job fasta_file_name
 submit_feature_job() {
-	local fasta_file=$1
-	local flag_file="${LOC_FLAGS}/${fasta_file}.flag"
-	# If flag exists, do not resubmit job
-	if [ -f "${flag_file}" ]; then
-		echo "Job already submitted for ${fasta_file}. Skipping."
-		return 0
-	fi
-	cp -r "$LOC_FEA_GEN/feaGen_template" "$LOC_FEA_GEN/${fasta_file}"
-	cd "$LOC_FEA_GEN/${fasta_file}"
-	echo "FILE=${fasta_file}" > "$LOC_FEA_GEN/${fasta_file}/00_user_parameters.inc"
-	local JOBID1=$(sbatch --parsable script_msa.sh)
-	echo "FEATURE FILE MISSING... STARTING MSA FOR $fasta_file WITH JOB ID: ${JOBID1}"
-	MSA_JOBIDS+=("$JOBID1")
-	# Create a flag file indicating that this feature is being processed
-	touch "${flag_file}"
-}
-
-# check_and_process_fasta: Main function to check and process fasta files.
-# Processes an array of stoichiometry pairs.
-# For each stoichiometry pair, it checks the existence of associated fasta and feature files.
-# If feature files are missing, it submits a job to create them.
-# Usage: check_and_process_fasta "feature1:count1" "feature2:count2" ...
-check_and_process_fasta() {
-	local stoichiometry_pairs=("$@")
-	for pair in "${stoichiometry_pairs[@]}"; do
-		IFS=':' read -r feature count <<< "$pair"
-		IFS=',' read -ra fasta_files <<< "$feature"
-		for fasta_file in "${fasta_files[@]}"; do
-			local fasta_path="${LOC_FASTA}/${fasta_file}.fasta"
-			local feature_file="${LOC_FEATURES}/${fasta_file}/features.pkl"
-			if ! check_file_exists "${fasta_path}"; then
-				echo "At least one fasta file missing. Not found: $fasta_path"
-				FASTA_EXISTS="FALSE"
-			fi
-			if ! check_file_exists "${feature_file}"; then
-				if [ "$FASTA_EXISTS" = "TRUE" ]; then
-					if [ "$MODE" -ne 2 ]; then
-						submit_feature_job "${fasta_file}"
-					else
-						echo "NO SUBMISSION OF MSA JOBS... CHANGE MODE TO START MSA FOR $fasta_file"
-					fi
-				else
-					echo "Please supply $fasta_file in $LOC_FASTA"
-				fi
-			fi
-		done
-	done
+        local fasta_file=$1
+        local flag_file="${LOC_FLAGS}/${fasta_file}.flag"
+        # If flag exists, do not resubmit job
+        if [ -f "${flag_file}" ]; then
+                echo "Job already submitted for ${fasta_file}. Skipping."
+                CONTINUE="FALSE"
+                return 0
+        fi
+        cp -r "$LOC_FEA_GEN/feaGen_template" "$LOC_FEA_GEN/${fasta_file}"
+        cd "$LOC_FEA_GEN/${fasta_file}"
+        echo "FILE=${fasta_file}" > "$LOC_FEA_GEN/${fasta_file}/00_user_parameters.inc"
+        local JOBID1=$(sbatch --parsable script_msa.sh)
+        echo "FEATURE FILE MISSING... STARTING MSA FOR $fasta_file WITH JOB ID: ${JOBID1}"
+        # Create a flag file indicating that this feature is being processed
+        touch "${flag_file}"
+        CONTINUE="FALSE"
 }
 
 # This function calculates the overall amino acid length of the input fasta files based on the specified stoichiometries.
@@ -208,8 +218,22 @@ submit_jobs_based_on_mode() {
 	# Initialize an associative array to hold the counts for each individual model
 	declare -A MODEL_COUNTS
 
-	if [ "$mode" -eq 1 ]; then
-		local length=$(calculate_setup_aa_length "$loc_fasta" "$loc_features" "$stoichiometry")
+	# Get the existing JOBID from the INFO_LIST
+	JOBID=$(awk -v line_num=${SLURM_ARRAY_TASK_ID} 'BEGIN{FS="\t"}; NR==line_num+1 {print $4}' "$INFO_LIST")
+
+		# Check if the JOBID is running
+		IS_RUNNING=$(squeue -j $JOBID | grep $JOBID || echo "")
+
+		if [ ! -z "$IS_RUNNING" ]; then
+			echo "Job or job array with JOBID $JOBID is currently running. Will not submit a new job."
+			return
+		else
+			# Delete the old JOBID from INFO_LIST if it's not running anymore
+			awk -v line_num=${SLURM_ARRAY_TASK_ID} 'BEGIN{OFS="\t"}; NR==line_num+1 {$4=""}1' "$INFO_LIST" > tmp && mv tmp "$INFO_LIST"
+		fi
+
+		if [ "$mode" -eq 1 ]; then
+			local length=$(calculate_setup_aa_length "$loc_fasta" "$loc_features" "$stoichiometry")
 
 		# Check which models are missing and create an array
 		local missing_models=()
@@ -252,40 +276,43 @@ submit_jobs_based_on_mode() {
 			echo "Starting ${JOBID1} (PRED $missing_models_str)"
 			MODELING_JOBIDS+=("$JOBID1")
 		fi
-	else
-		echo "NOT SUBMITTING NEW JOBS FOR ${OUT_NAME} - CHANGE MODE TO ALLOW NEW SUBMISSIONS."
-	fi
-}
-
-process_prediction() {
-	local loc_out=$1
-	local loc_scripts=$2
-	local out_name=$3
-	local out_dir=$4
-	local storage=$5
-
-	mkdir -p "${loc_out}/JSON" "${loc_out}/MODELS"
-	cd "${loc_scripts}/runs/"
-	mv "${out_name}" "${loc_out}/RUN_DETAILS"
-	cd "$loc_out"
-	# Move all .pdb files to MODELS folder and prepend with ${out_name}
-	for pdb_file in *.pdb; do
-		if [[ -f "$pdb_file" ]]; then
-			mv "$pdb_file" "${loc_out}/MODELS/${out_name}_${pdb_file}"
+		# Store the new JOBID into the INFO_LIST
+		awk -v line_num=${SLURM_ARRAY_TASK_ID} -v jobid=$JOBID 'BEGIN{OFS="\t"};\
+			NR==line_num+1{$4=jobid}1' "$INFO_LIST" > tmp && mv tmp "$INFO_LIST"
+				else
+					echo "NOT SUBMITTING NEW JOBS FOR ${OUT_NAME} - CHANGE MODE TO ALLOW NEW SUBMISSIONS."
 		fi
-	done
-	# Move all .json files to JSON folder and prepend with ${out_name}
-	for json_file in *.json; do
-		if [[ -f "$json_file" ]]; then
-			mv "$json_file" "${loc_out}/JSON/${out_name}_${json_file}"
-		fi
-	done
-	Rscript --vanilla "${loc_out}/RUN_DETAILS"/extract2csv.R "${loc_out}" "${out_name}"
-}
+	}
 
-add_date() {
-	# Argument: Full path to the directory to be renamed
-	local ITEM_PATH="$1"
+	process_prediction() {
+		local loc_out=$1
+		local loc_scripts=$2
+		local out_name=$3
+		local out_dir=$4
+		local storage=$5
+
+		mkdir -p "${loc_out}/JSON" "${loc_out}/MODELS"
+		cd "${loc_scripts}/runs/"
+		mv "${out_name}" "${loc_out}/RUN_DETAILS"
+		cd "$loc_out"
+		# Move all .pdb files to MODELS folder and prepend with ${out_name}
+		for pdb_file in *.pdb; do
+			if [[ -f "$pdb_file" ]]; then
+				mv "$pdb_file" "${loc_out}/MODELS/${out_name}_${pdb_file}"
+			fi
+		done
+		# Move all .json files to JSON folder and prepend with ${out_name}
+		for json_file in *.json; do
+			if [[ -f "$json_file" ]]; then
+				mv "$json_file" "${loc_out}/JSON/${out_name}_${json_file}"
+			fi
+		done
+		Rscript --vanilla "${loc_out}/RUN_DETAILS"/extract2csv.R "${loc_out}" "${out_name}"
+	}
+
+	add_date() {
+		# Argument: Full path to the directory to be renamed
+		local ITEM_PATH="$1"
 
 		# Check if the path was provided
 		if [ -z "$ITEM_PATH" ]; then

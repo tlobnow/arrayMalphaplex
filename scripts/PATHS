@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 ### COMMENT/UNCOMMENT AS NEEDED
-#RUN_MODE=SINGLE
-RUN_MODE=MULTI
+RUN_MODE=SINGLE
+#RUN_MODE=MULTI
 #RUN_MODE=MATRIX
 
 MODE=1
@@ -34,7 +34,7 @@ AF_DIR=/u/${USER}/af2complex/src
 # DEFAULT LOCATION FOR FINISHED OUTPUT FOLDERS
 STORAGE=${MAIN}/output_files
 
-### MAYBE NEEDS TO BE ADJUSTED IN THE FUTURE IF MPCDF CHANGES STUFF #####################################################
+### MAYBE NEEDS TO BE ADJUSTED IN THE FUTURE IF MPCDF CHANGES STUFF ######################################################
 AF2_DIR=/mpcdf/soft/SLE_15/packages/x86_64/alphafold/2.3.1
 DATA_DIR=/raven/ri/public_sequence_data/alphafold2/git-v2.3.1/data/
 PRESET="reduced_dbs"
@@ -73,3 +73,31 @@ touch ${STORAGE}/finished_files_will_move_here
 FASTA_PATHS=${MAIN}/fasta_files/$FILE.fasta
 OUTPUT_DIR=${LOC_FEATURES}
 TOOL_DIR=/mpcdf/soft/SLE_15/packages/x86_64/alphafold/2.3.1/bin
+
+
+# PATH VALIDATION ########################################################################################################
+# Validate that the specified paths exist and are directories
+validate_directory_path() {
+  local dir_path=$1
+  local dir_name=$2
+
+  if [ ! -d "$dir_path" ]; then
+    echo "Error: The $dir_name directory '$dir_path' does not exist."
+    exit 1
+  fi
+}
+
+# Validate MAIN directory
+validate_directory_path "$MAIN" "MAIN"
+
+# Validate PTMP directory
+validate_directory_path "$PTMP" "PTMP"
+
+# Validate PYTHON_PATH directory
+validate_directory_path "$PYTHON_PATH" "PYTHON_PATH"
+
+# Validate AF_DIR directory
+validate_directory_path "$AF_DIR" "AF_DIR"
+
+# Validate STORAGE directory
+validate_directory_path "$STORAGE" "STORAGE"
