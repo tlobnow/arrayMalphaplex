@@ -22,19 +22,12 @@
     conda create --name malpha python=3.8
     ```
 
-3. **Activate the Environment**
-
-    ```bash
-    conda activate malpha
-    ```
-    To automatically activate the environment at login, add `conda activate malpha` to your `~/.bashrc` file.
-
-4. **Clone Required GitHub Repositories and Run Setup Script**
+3. **Clone Required GitHub Repositories and Run Setup Script**
 
     ```bash
     git clone https://github.com/FreshAirTonight/af2complex.git
-    git clone https://github.com/tlobnow/malphaplex.git
-    cd malphaplex
+    git clone https://github.com/tlobnow/arrayMalphaplex.git
+    cd arrayMalphaplex
     ./setup.sh
     ```
 
@@ -43,7 +36,6 @@
 1. **Activate the Environment and Update Scripts**
 
     ```bash
-    conda activate malpha
     cd malphaplex
     git pull
     ```
@@ -63,7 +55,19 @@
 4. **Monitor Job Progress**
 
     - Use `check_squeue.sh` or `squeue.sh` to view currently running jobs.
-    - Check the `feature_files` folder for the prepared features.
+    - Start `./submit_array.sh` to start/continue steps of the pipeline:
+        - 1˚ start: prepare feature files --> `/ptmp/$USER/feature_files`
+        - 2˚ start: predict models --> `/ptmp/$USER/output_files`
+        - 3˚ start: process and move files --> `$MAIN/output_files`
+
+    - The `INFO_LIST` summaries are provided in `$MAIN/scripts/lists`
+    - Final output files will be moved into `$MAIN/output_files` and receive a `repX` suffix if the same setup is generated repeatedly (it is advised to repeat setup runs with new random seeds)
+	- The log file contains all information about the run coordination
+	- `RUN_DETAILS` will contain all model setting used to generate the respective models
+	- All predicted models are stored in `MODELS`
+	- The summary CSV files are in the respective `CSV` folder (two files are generated, one contains all models including recycles, the other file is limited to the final five models)
+	- The JSON files are provided in the respective `JSON` folder
+	- Recycles are stored in the respectived `recycles` folder
 
 5. **Retrieve and Process Results**
 
