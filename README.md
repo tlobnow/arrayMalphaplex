@@ -31,12 +31,16 @@
     ./setup.sh
     ```
 
+4. **Adjust the paths according to your installation**
+
+    - Open `PATHS` in the scripts directory and check if the paths correspond to your installation, otherwise adjust accordingly..
+
 ## Normal Session
 
 1. **Specify Run Mode and User Parameters**
 
-    Edit the `PATHS` to specify the `RUN_MODE` (single, multiple, or matrix-like setups), `MODE` (1 for job submission, 2 for progress information), and other settings.
-    Edit the `user_parameters.sh` to enter setup components (monomers) and the stoichiometry information
+    - Edit `PATHS` to specify the `RUN_MODE` (single, multiple, or matrix-like setups), `MODE` (1 for job submission, 2 for progress information), and other settings.
+    - Edit `user_parameters.sh` to enter setup components (monomers) and the stoichiometry information
 
 2. **Submit Array Jobs**
 
