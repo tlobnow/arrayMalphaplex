@@ -49,8 +49,7 @@
 3. **Monitor Job Progress**
 
     Use `check_squeue.sh` or `squeue.sh` to view currently running jobs.
-    Start `./submit_array.sh` to start/continue steps of the pipeline:
- 
+    Start `./submit_array.sh` to start/continue steps of the pipeline: 
 	- preparation of feature files --> `/ptmp/$USER/feature_files`
         - prediction of models --> `/ptmp/$USER/output_files`
         - processing and moving output files for downstream analysis --> `$MAIN/output_files`
